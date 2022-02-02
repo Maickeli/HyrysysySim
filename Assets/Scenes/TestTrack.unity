@@ -544,7 +544,6 @@ GameObject:
   - component: {fileID: 1349643162}
   - component: {fileID: 1349643161}
   - component: {fileID: 1349643160}
-  - component: {fileID: 1349643159}
   m_Layer: 0
   m_Name: Terrain
   m_TagString: Untagged
@@ -552,51 +551,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 4294967295
   m_IsActive: 0
---- !u!114 &1349643159
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1349643158}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 910771039, guid: f56d46228aee4734f9114056c53bb57e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  surfacevecs: []
-  tdataFloat: []
-  terrainData: {fileID: 15600000, guid: f20cb151052bd324790fd26a5a53bf00, type: 2}
-  xStart: 0
-  zStart: 0
-  roadSurface: {fileID: 0}
-  surfaceMesh: {fileID: 0}
-  surfaceCollider: {fileID: 0}
-  terrainDataStored: []
-  terrainChanges: []
-  terrainTrees: []
-  detailInstances: []
-  detailInstanceStarts: 
-  surfaceObjects: []
-  terrainTestPoints: []
-  splatData: []
-  addedTrees: []
-  holes: []
-  terrainHeightsBackup: []
-  terrainTreesBackup: []
-  terrainDetailBackup: []
-  terrainSplatBackup: []
-  detailInstanceStartsBackUp: 
-  heightmapFlag: 0
-  splatmapFlag: 0
-  treeFlag: 0
-  detailFlag: 0
-  holesFlag: 0
-  terrainDone: 0
-  backupFlagNotification: 0
-  ignore: 0
-  backupObject: {fileID: 0}
-  terrain: {fileID: 0}
 --- !u!154 &1349643160
 TerrainCollider:
   m_ObjectHideFlags: 0
@@ -1013,7 +967,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2103614778}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.9, y: 0, z: -1.29}
+  m_LocalPosition: {x: 0, y: 0, z: -1.29}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:
   - {fileID: 7832807094576904289}
@@ -1218,6 +1172,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   vehicleController: {fileID: 5815435759599818942}
   gearRatios:
+  - -4
   - 3.666
   - 2.047
   - 1.258
@@ -1239,7 +1194,7 @@ MonoBehaviour:
   vehicleController: {fileID: 5815435759599818942}
   mass: 1500
   wheelBase: 2.268
-  centerOfGravityHeight: 1
+  centerOfGravityHeight: 0.5
   fromCenterToFrontAxle: 1.268
   fromCenterToRearAxle: 1
   fromLeftWheelToRight: 1.8
@@ -1276,13 +1231,56 @@ MonoBehaviour:
   steering: 0
   brake: 0
   maxSteerAngle: 30
-  maxGrip: 100
-  magicValue: 1
+  maxGrip: 10000000
+  magicValue: -1
   velocity: {x: 0, y: 0}
+  sideslip: 0
   force: {x: 0, y: 0}
   acceleration_wc: {x: 0, y: 0}
-  carVelocity_wc: {x: 0, y: 5}
+  carVelocity_wc: {x: 0, y: 0}
   carPos_wc: {x: 0, y: 0}
+  wheelGrip:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0.0003656391
+      value: 0.0000049967784
+      inSlope: -0.0011573741
+      outSlope: 0.30178186
+      tangentMode: 1
+      weightedMode: 0
+      inWeight: 0.1000497
+      outWeight: 0.1207518
+    - serializedVersion: 3
+      time: 5.6692357
+      value: 0.9898215
+      inSlope: 0.008184838
+      outSlope: -0.0005540413
+      tangentMode: 1
+      weightedMode: 0
+      inWeight: 0.27559263
+      outWeight: 0.020712536
+    - serializedVersion: 3
+      time: 15.495783
+      value: 0.7970751
+      inSlope: -0.009816751
+      outSlope: -0.009816751
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.47452715
+      outWeight: 0.09592374
+    - serializedVersion: 3
+      time: 91.046135
+      value: 0.59025717
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   carBodyHolder: {fileID: 2103614779}
   rpmText: {fileID: 434331889}
   speedText: {fileID: 1428365266}
@@ -1387,7 +1385,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   springLength: 0.25
-  springConstant: 150000
+  springConstant: 60000
 --- !u!1 &5815671510394038584
 GameObject:
   m_ObjectHideFlags: 0
@@ -2477,8 +2475,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  coefficientOfFrictionForward: 1
+  coefficientOfFrictionForwardOnSlip: 0
   coefficientOfRollingFrictiontion: 0.015
-  corneringStiffness: -5
+  corneringStiffness: -10
   lateralVelocity: 0
   slipAngle: 0
 --- !u!4 &7832807092860818333
@@ -2595,8 +2595,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  coefficientOfFrictionForward: 1
+  coefficientOfFrictionForwardOnSlip: 0
   coefficientOfRollingFrictiontion: 0.015
-  corneringStiffness: -5
+  corneringStiffness: -10
   lateralVelocity: 0
   slipAngle: 0
 --- !u!4 &7832807093621403123
@@ -2663,8 +2665,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  coefficientOfFrictionForward: 1
+  coefficientOfFrictionForwardOnSlip: 0
   coefficientOfRollingFrictiontion: 0.015
-  corneringStiffness: -5
+  corneringStiffness: -10
   lateralVelocity: 0
   slipAngle: 0
 --- !u!4 &7832807094526619751
@@ -2691,7 +2695,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7832807094576904294}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.9, y: 0, z: 1.29}
+  m_LocalPosition: {x: 0, y: 0, z: 1.29}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:
   - {fileID: 5810570549195907188}
@@ -2747,8 +2751,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  coefficientOfFrictionForward: 1
+  coefficientOfFrictionForwardOnSlip: 0
   coefficientOfRollingFrictiontion: 0.015
-  corneringStiffness: -5
+  corneringStiffness: -10
   lateralVelocity: 0
   slipAngle: 0
 --- !u!4 &7832807094717078313

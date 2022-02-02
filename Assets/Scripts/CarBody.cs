@@ -8,7 +8,7 @@ public class CarBody : MonoBehaviour
 
     public float mass;
     public float wheelBase = 2.268f;
-    public float centerOfGravityHeight = 1f;
+    public float centerOfGravityHeight = 0.4f;
     public float fromCenterToFrontAxle = 1.268f;
     public float fromCenterToRearAxle = 1f;
     public float fromLeftWheelToRight = 1.8f;

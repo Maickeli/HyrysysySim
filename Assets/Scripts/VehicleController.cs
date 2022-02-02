@@ -23,14 +23,6 @@ public class VehicleController : MonoBehaviour
 
     public float maxGrip;
 
-    /*public Transform model;
-    float rotationPos;
-    float carSlipAngle;
-    float yawVelocity;
-    float angularAcceleration;
-    float accelerationLateral;
-    float carVelocityWcX, carVelocityWcY;
-    float carPosWcX, carPosWcY;*/
     public float magicValue;
     
     float rearSlipAngle, frontSlipAngle;
@@ -39,7 +31,7 @@ public class VehicleController : MonoBehaviour
     public Vector2 velocity;
     float yawspeed;
     float rot_angle;
-    float sideslip;
+    public float sideslip;
     Vector2 flatf;
     Vector2 flatr;
     bool front_slip, rear_slip;
@@ -53,6 +45,8 @@ public class VehicleController : MonoBehaviour
     public Vector2 acceleration_wc, carVelocity_wc, carPos_wc;
     float carAngle;
     float wheelAngularVelocity;
+
+    public AnimationCurve wheelGrip;
 
     // Models
     [SerializeField] Transform carBodyHolder;
@@ -132,21 +126,26 @@ public class VehicleController : MonoBehaviour
         if( velocity.x == 0 )		// TODO: fix singularity
             rot_angle = 0;
         else
-            rot_angle = Mathf.Atan2( yawspeed, velocity.x);
+            rot_angle = Mathf.Atan2( yawspeed, Mathf.Abs(velocity.x));
+
+        
 
         // Calculate the side slip angle of the car (a.k.a. beta)
-        if( velocity.x == 0 )		// TODO: fix singularity
-            sideslip = 0;
-        else
-            sideslip = Mathf.Atan2( velocity.y, velocity.x);		
+        //if( velocity.x == 0 )		// TODO: fix singularity
+        //    sideslip = 0;
+        //else
+            sideslip = Mathf.Atan2( velocity.y, Mathf.Abs(velocity.x));
+            /*if(velocity.y < 0) {
+                sideslip = -sideslip;
+            }*/
 
         // Calculate slip angles for front and rear wheels (a.k.a. alpha)
-        frontSlipAngle = sideslip + rot_angle - steeringAngleRad;
+        frontSlipAngle = sideslip + rot_angle - (Mathf.Sign(velocity.x) * steeringAngleRad);
         rearSlipAngle  = sideslip - rot_angle;
 
 
+
         // weight per axle = half car mass times 1G (=9.8m/s^2) /////////////////////////////////////////////////////////////////////////////////
-        float weight = carBody.mass * 9.8f * 0.5f;
         float weightFront = 0;
         float weightRear = 0;
         float corneringStiffnessFront = 0;
@@ -164,30 +163,40 @@ public class VehicleController : MonoBehaviour
 
         // lateral force on front wheels = (Ca * slip angle) capped to friction circle * load
         flatf.x = 0;
-        flatf.y = corneringStiffnessFront * frontSlipAngle;
-        flatf.y = Mathf.Min(maxGrip, flatf.y);
-        flatf.y = Mathf.Max(-maxGrip, flatf.y);
-        flatf.y *= weightFront;
+        //float maxLateralForceFront = magicValue * Mathf.Sign(frontSlipAngle) * wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI)) * weightFront;
+        flatf.y = magicValue * Mathf.Sign(frontSlipAngle) * wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI)) * weightFront; //
+        //flatf.y = corneringStiffnessFront * frontSlipAngle;
+        //flatf.y = Mathf.Min(maxGrip, flatf.y);
+        //flatf.y = Mathf.Max(-maxGrip, flatf.y);
+        //flatf.y *= weightFront;
         if(front_slip)
             flatf.y *= 0.5f;
 
         // lateral force on rear wheels
         flatr.x = 0;
-        flatr.y = corneringStiffnessRear * rearSlipAngle;
-        flatr.y = Mathf.Min(maxGrip, flatr.y);
-        flatr.y = Mathf.Max(-maxGrip, flatr.y);
-        flatr.y *= weightRear;
+        flatr.y = magicValue * Mathf.Sign(rearSlipAngle) * wheelGrip.Evaluate(Mathf.Abs(rearSlipAngle*180f/Mathf.PI)) * weightRear;
+        //flatr.y = corneringStiffnessRear * rearSlipAngle;
+        //flatr.y = Mathf.Min(maxGrip, flatr.y);
+        //flatr.y = Mathf.Max(-maxGrip, flatr.y);
+        //flatr.y *= weightRear;
         if(rear_slip)
             flatr.y *= 0.5f;
 
         // longtitudinal force on rear wheels - very simple traction model
-        float torqueOnWheels = 0;
+        float wheelsTractionForceForward = 0;
         foreach(Wheel w in wheels) {
             if(w.rl || w.rr) {
-                torqueOnWheels += w.GetTorqueOnWheel();
+                float tractionForce = w.GetWheelForwardTractionForce();               
+                float maxTractionForce = w.coefficientOfFrictionForward * w.GetWeightOnWheel();
+                if(tractionForce > maxTractionForce) {
+                    tractionForce = maxTractionForce;
+                    if(w.rl) Debug.Log("LEFTI RUAPII");
+                    if(w.rr) Debug.Log("Raitti RUAPII");
+                } 
+                wheelsTractionForceForward += tractionForce;
             }
         }
-        ftraction.x = torqueOnWheels;
+        ftraction.x = wheelsTractionForceForward;
         ftraction.x -= brakeForce * brake * Mathf.Sign(velocity.x);
         ftraction.y = 0;
         if(rear_slip)
@@ -199,12 +208,13 @@ public class VehicleController : MonoBehaviour
             totalRollingResitance += w.GetRollingResistance();
         }
         // drag and rolling resistance
-        resistance.x = - (totalRollingResitance + carBody.GetAeroDrag());//( totalRollingResitance*velocity.x + carBody.GetAeroDrag()*velocity.x*Mathf.Abs(velocity.x) );
-        resistance.y = - (carBody.GetAeroDragSide() + (totalRollingResitance * Mathf.Sign(velocity.y)));//( totalRollingResitance*velocity.y + carBody.GetAeroDrag()*velocity.y*Mathf.Abs(velocity.y) );
-        //Debug.Log("r: " + totalRollingResitance + " d: " + carBody.GetAeroDrag());
+        resistance.x = - (totalRollingResitance + carBody.GetAeroDrag());
+        resistance.y = - (carBody.GetAeroDragSide() + (totalRollingResitance * Mathf.Sign(velocity.y)));
+
         // sum forces
-        force.x = ftraction.x + Mathf.Sin(steeringAngleRad) * flatf.x + resistance.x; //+ flatr.x
-        force.y = ftraction.y + Mathf.Cos(steeringAngleRad) * flatf.y + resistance.y;	//+ flatr.y
+        force.x = ftraction.x + Mathf.Sin(steeringAngleRad) * flatf.x + flatr.x + resistance.x; //
+        force.y = ftraction.y + Mathf.Cos(steeringAngleRad) * flatf.y + flatr.y + resistance.y;	//
+
 
 
         // torque on body from lateral forces
@@ -256,8 +266,6 @@ public class VehicleController : MonoBehaviour
         return magnitude;
     }
 
-    //public float frontHeightA, rearHeightA;
-
     void VisualWeightTransfer() {
 
         // Forward
@@ -267,18 +275,28 @@ public class VehicleController : MonoBehaviour
 
         float hypotenuseX = Mathf.Sqrt(carBody.wheelBase * carBody.wheelBase + rearHeight * rearHeight);
         
-        float rotationX = Mathf.Asin((rearHeight-frontHeight)/hypotenuseX) * 180 / Mathf.PI;
+        float rotationX = Mathf.Asin((rearHeight-frontHeight)/hypotenuseX) * 180f / Mathf.PI;
+        rotationX = 0;
 
         // Lateral
 
+        float rotationZ = 0;
         float leftHeight = suspension.springLength - suspension.GetSpringPosLeft();
         float rightHeight = suspension.springLength - suspension.GetSpringPosRight();
 
-        float hypotenuseZ = Mathf.Sqrt(carBody.fromLeftWheelToRight * carBody.fromLeftWheelToRight + leftHeight * leftHeight);
-        
-        float rotationZ = -(Mathf.Asin((leftHeight-rightHeight)/hypotenuseZ) * 180 / Mathf.PI) + magicValue;   // UGLY FIX - 1.8f // Maybe shouldnt be minus
-        if(rotationZ < 0) rotationZ *= 2;// EXTRA UGLY
-        /// HOLDERI TÄYTYY SIIRTÄÄ KESKELLE, MUUTEN TOISEEN SUUNTAAN NOUSEE JA TOISEEN LASKEE
+        float leftAndRightDifference = leftHeight - rightHeight;
+        if(leftAndRightDifference != 0) {
+            float fromLeftToMiddle = carBody.fromLeftWheelToRight / 2f;
+            float middleHeight = (leftHeight + rightHeight) / 2f;
+            float alpha = Mathf.Atan(fromLeftToMiddle / middleHeight);
+            float c = (Mathf.Sqrt(carBody.fromLeftWheelToRight * carBody.fromLeftWheelToRight + leftAndRightDifference * leftAndRightDifference)) / 2;
+            float gamma = Mathf.Sign(leftAndRightDifference) * (0.5f * Mathf.PI) - (0.5f * Mathf.PI) + Mathf.Asin(fromLeftToMiddle / (Mathf.Sign(leftAndRightDifference) * c));
+            float delta = Mathf.Atan(middleHeight / fromLeftToMiddle);
+            float epsilon = (0.5f * Mathf.PI) - delta;
+            float beta = Mathf.PI - gamma - epsilon;
+            rotationZ = ((0.5f * Mathf.PI) - (alpha + beta))  * 180f / Mathf.PI; // 
+        }
+
 
         carBodyHolder.localPosition = new Vector3(carBodyHolder.localPosition.x, rearHeight, carBodyHolder.localPosition.z);
         carBodyHolder.localEulerAngles = new Vector3(rotationX, 0, rotationZ); 

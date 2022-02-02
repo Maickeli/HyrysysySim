@@ -50,7 +50,7 @@ public class Suspension : MonoBehaviour
         float sideWeight = 0;
 
         foreach(Wheel w in vehicleController.wheels) {
-            if(w.fl || w.fl) {
+            if(w.fl || w.rl) {
                 sideWeight += w.GetWeightOnWheel();
             }
         }
@@ -61,7 +61,7 @@ public class Suspension : MonoBehaviour
         return springPos;
     }
 
-        public float GetSpringPosRight() {
+    public float GetSpringPosRight() {
         float sideWeight = 0;
 
         foreach(Wheel w in vehicleController.wheels) {
@@ -72,7 +72,7 @@ public class Suspension : MonoBehaviour
         float springPos = sideWeight / springConstant;
         if(springPos < 0) springPos = 0;
         if(springPos > springLength) springPos = springLength;
-
+        
         return springPos;
     }
 }

@@ -11,7 +11,9 @@ public class Wheel : MonoBehaviour
     public float radius;
     public bool fl, fr, rl, rr;
     public AnimationCurve coefficientFrictionByTemperature;
-    public AnimationCurve coefficientFrictionBySlipAngle; 
+    public AnimationCurve coefficientFrictionBySlipAngle;
+    public float coefficientOfFrictionForward;
+    public float coefficientOfFrictionForwardOnSlip;
     public float coefficientOfRollingFrictiontion = 0.015f;
     public float corneringStiffness;
     public float lateralVelocity;
@@ -47,26 +49,29 @@ public class Wheel : MonoBehaviour
         weightOnWheel = 0;
         if(rl || rr) {
             // Static wheel load
-            weightOnWheel = carBody.mass * Environment.gravity / (carBody.fromCenterToRearAxle / carBody.wheelBase);
+            weightOnWheel = carBody.mass * Environment.gravity * (carBody.fromCenterToFrontAxle / carBody.wheelBase);
 
             // Affection of Forward acceleration
-            weightOnWheel = weightOnWheel + ((carBody.centerOfGravityHeight / carBody.wheelBase) * (vehicleController.force.x / 4)); // Change 0 to forward force
+            weightOnWheel = weightOnWheel + ((carBody.centerOfGravityHeight / carBody.wheelBase) * (vehicleController.force.x / 2)); 
         }
         else {
             // Static wheel load
-            weightOnWheel = carBody.mass * Environment.gravity / (carBody.fromCenterToFrontAxle / carBody.wheelBase);
+            weightOnWheel = carBody.mass * Environment.gravity * (carBody.fromCenterToRearAxle / carBody.wheelBase);
 
             // Affection of Forward acceleration
-            weightOnWheel = weightOnWheel - ((carBody.centerOfGravityHeight / carBody.wheelBase) * (vehicleController.force.x / 4)); // Change 0 to forward force
+            weightOnWheel = weightOnWheel - ((carBody.centerOfGravityHeight / carBody.wheelBase) * (vehicleController.force.x / 2)); // / 4 pois?
         }
 
         // Affection of cornering ; / 2 assuming center of gravity is in center; 
+
         if(isOutSideWheel) {
-            weightOnWheel = (weightOnWheel / 2) + ((Mathf.Abs(vehicleController.force.y) / 4) * (carBody.centerOfGravityHeight / carBody.fromLeftWheelToRight)); // change 0 to sideways force
+            weightOnWheel = (weightOnWheel / 2) + ((Mathf.Abs(vehicleController.force.y) / 2) * (carBody.centerOfGravityHeight / carBody.fromLeftWheelToRight));
         }
         else {
-            weightOnWheel = (weightOnWheel / 2) - ((Mathf.Abs(vehicleController.force.y) / 4) * (carBody.centerOfGravityHeight / carBody.fromLeftWheelToRight)); // change 0 to sideways force
+            weightOnWheel = (weightOnWheel / 2) - ((Mathf.Abs(vehicleController.force.y) / 2) * (carBody.centerOfGravityHeight / carBody.fromLeftWheelToRight)); 
         }
+        
+
 
 
         // Missing: Torsionally Compliant Chassis Weight Transfer, affection of cornering to load on front and rear.
@@ -77,9 +82,17 @@ public class Wheel : MonoBehaviour
     public float GetTorqueOnWheel() {
         float torque = 0;
         if(rl || rr) {
-            torque = gearbox.TorqueOnAxis() / radius / 2;
+            torque = gearbox.TorqueOnAxis() / 2;
         }
         return torque;
+    }
+
+    public float GetWheelForwardTractionForce() {
+        float force = 0;
+        if(rl || rr) {
+            force = GetTorqueOnWheel() / radius;
+        }
+        return force;
     }
 
     public float GetAngularVelocity() {
