@@ -15,17 +15,16 @@ public class VehicleController : MonoBehaviour
     public float corneringStiffness;
     public float velocityForward, velocityLateral, rpm;
     public int currentGear;
-    float  xPos, yPos;
 
     // Wheels
     public Wheel[] wheels;  // FL FR RL RR
     public float brakeForce;
     public float throttle, steering, brake;
-    public float maxSteerAngle = 40;
+    public float maxSteerAngle = 30;
 
     public float magicValue;
     
-    float rearSlipAngle, frontSlipAngle;
+    public float rearSlipAngle, frontSlipAngle;
     float sn;
 	float cs;
     public Vector2 velocity;
@@ -82,7 +81,8 @@ public class VehicleController : MonoBehaviour
         }
 
         // Physics
-        Physics();
+        DetectGroundHeight();
+        CarPhysics();
 
         // Visuals
         VisualWeightTransfer();
@@ -100,7 +100,7 @@ public class VehicleController : MonoBehaviour
     }
 
 
-    void Physics() {
+    void CarPhysics() {
         rpm = gearbox.GetRPM();
         sn = Mathf.Sin(carAngle);
         cs = Mathf.Cos(carAngle);
@@ -234,7 +234,7 @@ public class VehicleController : MonoBehaviour
             frictionCircleMultiplierFront = 1;
             frictionCircleMultiplierRear = 1;
         }
-        Debug.Log("f: " + frictionCircleMultiplierFront + " r: " + frictionCircleMultiplierRear);
+        //Debug.Log("f: " + frictionCircleMultiplierFront + " r: " + frictionCircleMultiplierRear);
 
         flatf.y = -Mathf.Sign(frontSlipAngle) * corneringStiffnessFront * weightFront * frictionCircleMultiplierFront; 
         //wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI))
@@ -251,18 +251,39 @@ public class VehicleController : MonoBehaviour
         foreach(Wheel w in wheels) {
             totalRollingResitance += w.GetRollingResistance();
         }
+        
         // drag and rolling resistance
         resistance.x = - (totalRollingResitance + carBody.GetAeroDrag());
-        resistance.y = - Mathf.Sign(velocity.y) * (carBody.GetAeroDragSide() + totalRollingResitance);
+        if(velocity.magnitude > 3) {
+            resistance.y = - Mathf.Sign(velocity.y) * (carBody.GetAeroDragSide() + totalRollingResitance);
+        }
+
         //Debug.Log("a " + Mathf.Sign(velocity.y) *  carBody.GetAeroDragSide() + " r " + totalRollingResitance);
         // sum forces
-        force.x = ftraction.x + Mathf.Sin(steeringAngleRad) * flatf.x + flatr.x + resistance.x; //
-        force.y = ftraction.y + Mathf.Cos(steeringAngleRad) * flatf.y + flatr.y + resistance.y;	//
+
+
+        if(isGrounded) {
+            force.x = ftraction.x + Mathf.Sin(steeringAngleRad) * flatf.x + flatr.x + resistance.x;
+            force.y = ftraction.y + Mathf.Cos(steeringAngleRad) * flatf.y + flatr.y + resistance.y;
+        }    
+        else {
+            resistance.x = -carBody.GetAeroDrag();
+            resistance.y = - Mathf.Sign(velocity.y) * carBody.GetAeroDragSide();
+            force.x = resistance.x;
+            force.y = resistance.y;
+        }
+
 
 
 
         // torque on body from lateral forces
-        torque = carBody.fromCenterToFrontAxle * flatf.y - carBody.fromCenterToRearAxle * flatr.y;
+        if(isGrounded) {
+            torque = carBody.fromCenterToFrontAxle * flatf.y - carBody.fromCenterToRearAxle * flatr.y;
+        }
+        else {
+            torque = 0;
+        }
+
 
     // Acceleration
         
@@ -306,13 +327,109 @@ public class VehicleController : MonoBehaviour
         //carAngle = carAngle * 180 / Mathf.PI;
         float carAngleDeg = carAngle * 180 / Mathf.PI;
 
-        transform.position = new Vector3(carPos_wc.x, 0, carPos_wc.y);
-        transform.eulerAngles = new Vector3(0, carAngleDeg, 0);
+        transform.position = new Vector3(carPos_wc.x, transform.position.y, carPos_wc.y);
+        transform.eulerAngles = new Vector3(transform.eulerAngles.x, carAngleDeg, transform.eulerAngles.z);
     }
 
     public float GetVelocityMagnitude() {
         float magnitude = Mathf.Sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
         return magnitude;
+    }
+
+    void DetectGroundHeight() {
+        RaycastHit[] hit = new RaycastHit[4];
+        int i = 0;
+        foreach(Wheel w in wheels) {
+            if (Physics.Raycast(w.model.position + new Vector3(0, 0.1f, 0), transform.TransformDirection(-Vector3.up), out hit[i], Mathf.Infinity, 7))
+            {
+                Debug.DrawRay(w.model.position, transform.TransformDirection(-Vector3.up) * hit[i].distance, Color.yellow);     
+            }
+            else
+            {
+                Debug.DrawRay(w.model.position, transform.TransformDirection(-Vector3.up) * 1000, Color.white);
+            }
+            i++;
+        }
+
+        CalculateCarRotationToMatchGround(hit);
+    }
+
+    float yPos;
+    float groundHeight;
+    float yVelocity;
+    bool isGrounded;
+    float rotationX;
+    float rotationZ;
+    void CalculateCarRotationToMatchGround(RaycastHit[] hit) {
+        
+
+        float newGroundHeight = (hit[0].point.y + hit[1].point.y + hit[2].point.y + hit[3].point.y) / 4f;//Mathf.Min(Mathf.Min(Mathf.Min(hit[0].point.y + hit[1].point.y), hit[2].point.y), hit[3].point.y); //
+        if(yPos <= newGroundHeight + 0.01f) {
+            yVelocity = (newGroundHeight - yPos) / Time.deltaTime;
+            isGrounded = true;
+        }
+        else{
+            yVelocity -= (Environment.gravity * magicValue) * Time.deltaTime;
+            isGrounded = false;
+        }
+        
+        yPos += yVelocity * Time.deltaTime;
+                
+        // No underground here
+        if(yPos <= newGroundHeight) { 
+            yPos = newGroundHeight;     
+        }
+
+    if(isGrounded)
+    {
+        // Forward rotation
+        
+        float frontHeight = (hit[0].point.y + hit[1].point.y) / 2;
+        float rearHeight = (hit[2].point.y + hit[3].point.y) / 2;
+
+        float frontAndRearDifference = frontHeight - rearHeight;
+        if(frontAndRearDifference != 0) {
+            float fromFrontToMiddle = carBody.wheelBase / 2f;
+            float middleHeight = (frontHeight + rearHeight) / 2f;
+            float alpha = Mathf.Atan(fromFrontToMiddle / middleHeight);
+            float c = (Mathf.Sqrt(carBody.wheelBase * carBody.wheelBase + frontAndRearDifference * frontAndRearDifference)) / 2;
+            float gamma = Mathf.Sign(frontAndRearDifference) * (0.5f * Mathf.PI) - (0.5f * Mathf.PI) + Mathf.Asin(fromFrontToMiddle / (Mathf.Sign(frontAndRearDifference) * c));
+            float delta = Mathf.Atan(middleHeight / fromFrontToMiddle);
+            float epsilon = (0.5f * Mathf.PI) - delta;
+            float beta = Mathf.PI - gamma - epsilon;
+            rotationX = ((0.5f * Mathf.PI) - (alpha + beta))  * 180f / Mathf.PI; // 
+        }
+        else {
+            rotationX = 0;
+        }
+
+        // Sideways rotation
+
+        float leftHeight = hit[0].point.y;
+        float rightHeight = hit[1].point.y;
+
+        float leftAndRightDifference = leftHeight - rightHeight;
+        if(leftAndRightDifference != 0) {
+            float fromLeftToMiddle = carBody.fromLeftWheelToRight / 2f;
+            float middleHeight = (leftHeight + rightHeight) / 2f;
+            float alpha = Mathf.Atan(fromLeftToMiddle / middleHeight);
+            float c = (Mathf.Sqrt(carBody.fromLeftWheelToRight * carBody.fromLeftWheelToRight + leftAndRightDifference * leftAndRightDifference)) / 2;
+            float gamma = Mathf.Sign(leftAndRightDifference) * (0.5f * Mathf.PI) - (0.5f * Mathf.PI) + Mathf.Asin(fromLeftToMiddle / (Mathf.Sign(leftAndRightDifference) * c));
+            float delta = Mathf.Atan(middleHeight / fromLeftToMiddle);
+            float epsilon = (0.5f * Mathf.PI) - delta;
+            float beta = Mathf.PI - gamma - epsilon;
+            rotationZ = ((0.5f * Mathf.PI) - (alpha + beta))  * 180f / Mathf.PI; // 
+        }
+        else {
+            rotationZ = 0;
+        }
+    }
+
+
+        
+Debug.Log(yVelocity);
+        transform.eulerAngles = new Vector3(rotationX, transform.eulerAngles.y, rotationZ);
+        transform.position = new Vector3(transform.position.x, yPos, transform.position.z);
     }
 
 
