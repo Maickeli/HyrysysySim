@@ -23,7 +23,7 @@ public class CarBody : MonoBehaviour
     }
 
     public float GetAeroDragSide() {
-        float drag = Mathf.Sign(vehicleController.velocity.y) * (aeroDragCoefficient * (0.5f * Environment.densityOfAir * aeroDragAreaSide * vehicleController.velocity.y * vehicleController.velocity.y));
+        float drag = Mathf.Sign(vehicleController.velocity.x) * (Mathf.Sign(vehicleController.velocity.y) * (aeroDragCoefficient * (0.5f * Environment.densityOfAir * aeroDragAreaSide * vehicleController.velocity.y * vehicleController.velocity.y)));
         return drag;
     }
 }

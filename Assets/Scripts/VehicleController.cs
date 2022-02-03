@@ -10,6 +10,8 @@ public class VehicleController : MonoBehaviour
     public Gearbox gearbox;
     Suspension suspension;
 
+    AudioSource audioSource;
+
     public float corneringStiffness;
     public float velocityForward, velocityLateral, rpm;
     public int currentGear;
@@ -20,8 +22,6 @@ public class VehicleController : MonoBehaviour
     public float brakeForce;
     public float throttle, steering, brake;
     public float maxSteerAngle = 40;
-
-    public float maxGrip;
 
     public float magicValue;
     
@@ -46,6 +46,7 @@ public class VehicleController : MonoBehaviour
     float carAngle;
     float wheelAngularVelocity;
 
+    public float minFrictionCircleValue;
     public AnimationCurve wheelGrip;
 
     // Models
@@ -57,6 +58,7 @@ public class VehicleController : MonoBehaviour
     void Start()
     {
         suspension = GetComponent<Suspension>();
+        audioSource = GetComponent<AudioSource>();
     }
 
     float timer;
@@ -84,6 +86,10 @@ public class VehicleController : MonoBehaviour
 
         // Visuals
         VisualWeightTransfer();
+        VisualWheelModelRotation();
+
+        // Audio
+        audioSource.pitch = 0.3f + rpm * 0.0003f;
 
         // UI
         rpmText.text = rpm.ToString("F0");
@@ -150,67 +156,105 @@ public class VehicleController : MonoBehaviour
         float weightRear = 0;
         float corneringStiffnessFront = 0;
         float corneringStiffnessRear = 0;
+        float forwardGripFront = 0;
+        float forwardGripRear = 0;
         foreach(Wheel w in wheels) {
             if(w.fl || w.fr) {
                 weightFront += w.GetWeightOnWheel();
-                corneringStiffnessFront += w.corneringStiffness;
+                corneringStiffnessFront += wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI));
+                forwardGripFront += w.coefficientFrictionBySlipRatio.Evaluate(w.GetSlipRatio());
+                //corneringStiffnessFront += w.corneringStiffness;
             }
             if(w.rl || w.rr) {
                 weightRear += w.GetWeightOnWheel();
-                corneringStiffnessRear += w.corneringStiffness;
+                corneringStiffnessRear += wheelGrip.Evaluate(Mathf.Abs(rearSlipAngle*180f/Mathf.PI));
+                forwardGripRear += w.coefficientFrictionBySlipRatio.Evaluate(w.GetSlipRatio());
+                //corneringStiffnessRear += w.corneringStiffness;
             }
         }
+
+
+
+
+        // longtitudinal force on rear wheels - very simple traction model
+        float frontWheelsTractionForceForward = 0;
+        float rearWheelsTractionForceForward = 0;
+        float frontWheelsTractionForceForwardMax = 0;
+        float rearWheelsTractionForceForwardMax = 0;
+        foreach(Wheel w in wheels) {
+            if(w.rl || w.rr) {
+                float tractionForce = w.GetWheelForwardTractionForce();               
+                float maxTractionForce = forwardGripRear * w.GetWeightOnWheel();//w.coefficientOfFrictionForward * w.GetWeightOnWheel();
+                //Debug.Log(forwardGripRear * w.GetWeightOnWheel());
+                if(tractionForce > maxTractionForce) {
+                    tractionForce = maxTractionForce;
+                }
+                if(w.GetSlipRatio() > 1f) {
+                    if(!w.audioSource.isPlaying) w.audioSource.Play();
+                }
+                else {
+                    if(w.audioSource.isPlaying) w.audioSource.Stop();
+                }
+                rearWheelsTractionForceForwardMax += maxTractionForce;
+                rearWheelsTractionForceForward += tractionForce;          
+            }
+            else {
+                float tractionForce = w.GetWheelForwardTractionForce();               
+                float maxTractionForce = forwardGripFront * w.GetWeightOnWheel();
+
+                if(tractionForce > maxTractionForce) {
+                    tractionForce = maxTractionForce;
+                }
+                frontWheelsTractionForceForwardMax += maxTractionForce;
+                frontWheelsTractionForceForward += tractionForce;
+            }
+        }
+
+        ftraction.x = rearWheelsTractionForceForward + frontWheelsTractionForceForward;
+        ftraction.y = 0;
+
+        
+        // Forces and torque on body
 
         // lateral force on front wheels = (Ca * slip angle) capped to friction circle * load
         flatf.x = 0;
         //float maxLateralForceFront = magicValue * Mathf.Sign(frontSlipAngle) * wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI)) * weightFront;
-        flatf.y = magicValue * Mathf.Sign(frontSlipAngle) * wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI)) * weightFront; //
-        //flatf.y = corneringStiffnessFront * frontSlipAngle;
-        //flatf.y = Mathf.Min(maxGrip, flatf.y);
-        //flatf.y = Mathf.Max(-maxGrip, flatf.y);
-        //flatf.y *= weightFront;
-        if(front_slip)
-            flatf.y *= 0.5f;
+
+        // Friction circle thingy: sqrt(1^2 - (tractionForce / maxTractionForce)^2)
+        float frictionCircleMultiplierFront = Mathf.Sqrt(1f - (frontWheelsTractionForceForward / frontWheelsTractionForceForwardMax) * (frontWheelsTractionForceForward / frontWheelsTractionForceForwardMax));
+        float frictionCircleMultiplierRear = Mathf.Sqrt(1f - (rearWheelsTractionForceForward / rearWheelsTractionForceForwardMax) * (rearWheelsTractionForceForward / rearWheelsTractionForceForwardMax));
+        if(float.IsNaN(frictionCircleMultiplierFront) || frictionCircleMultiplierFront < minFrictionCircleValue) {
+            frictionCircleMultiplierFront = minFrictionCircleValue;
+        }
+        if(float.IsNaN(frictionCircleMultiplierRear) || frictionCircleMultiplierRear < minFrictionCircleValue) {
+            frictionCircleMultiplierRear = minFrictionCircleValue;
+        }
+
+        if(Mathf.Abs(velocity.x) < 1) {
+            frictionCircleMultiplierFront = 1;
+            frictionCircleMultiplierRear = 1;
+        }
+        Debug.Log("f: " + frictionCircleMultiplierFront + " r: " + frictionCircleMultiplierRear);
+
+        flatf.y = -Mathf.Sign(frontSlipAngle) * corneringStiffnessFront * weightFront * frictionCircleMultiplierFront; 
+        //wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI))
+        
 
         // lateral force on rear wheels
         flatr.x = 0;
-        flatr.y = magicValue * Mathf.Sign(rearSlipAngle) * wheelGrip.Evaluate(Mathf.Abs(rearSlipAngle*180f/Mathf.PI)) * weightRear;
-        //flatr.y = corneringStiffnessRear * rearSlipAngle;
-        //flatr.y = Mathf.Min(maxGrip, flatr.y);
-        //flatr.y = Mathf.Max(-maxGrip, flatr.y);
-        //flatr.y *= weightRear;
-        if(rear_slip)
-            flatr.y *= 0.5f;
+        flatr.y = -Mathf.Sign(rearSlipAngle) * corneringStiffnessRear * weightRear * frictionCircleMultiplierRear; 
+        
+        // wheelGrip.Evaluate(Mathf.Abs(rearSlipAngle*180f/Mathf.PI))
 
-        // longtitudinal force on rear wheels - very simple traction model
-        float wheelsTractionForceForward = 0;
-        foreach(Wheel w in wheels) {
-            if(w.rl || w.rr) {
-                float tractionForce = w.GetWheelForwardTractionForce();               
-                float maxTractionForce = w.coefficientOfFrictionForward * w.GetWeightOnWheel();
-                if(tractionForce > maxTractionForce) {
-                    tractionForce = maxTractionForce;
-                    if(w.rl) Debug.Log("LEFTI RUAPII");
-                    if(w.rr) Debug.Log("Raitti RUAPII");
-                } 
-                wheelsTractionForceForward += tractionForce;
-            }
-        }
-        ftraction.x = wheelsTractionForceForward;
-        ftraction.x -= brakeForce * brake * Mathf.Sign(velocity.x);
-        ftraction.y = 0;
-        if(rear_slip)
-            ftraction.x *= 0.5f;
-
-    // Forces and torque on body
+        
         float totalRollingResitance = 0;
         foreach(Wheel w in wheels) {
             totalRollingResitance += w.GetRollingResistance();
         }
         // drag and rolling resistance
         resistance.x = - (totalRollingResitance + carBody.GetAeroDrag());
-        resistance.y = - (carBody.GetAeroDragSide() + (totalRollingResitance * Mathf.Sign(velocity.y)));
-
+        resistance.y = - Mathf.Sign(velocity.y) * (carBody.GetAeroDragSide() + totalRollingResitance);
+        //Debug.Log("a " + Mathf.Sign(velocity.y) *  carBody.GetAeroDragSide() + " r " + totalRollingResitance);
         // sum forces
         force.x = ftraction.x + Mathf.Sin(steeringAngleRad) * flatf.x + flatr.x + resistance.x; //
         force.y = ftraction.y + Mathf.Cos(steeringAngleRad) * flatf.y + flatr.y + resistance.y;	//
@@ -243,7 +287,12 @@ public class VehicleController : MonoBehaviour
         //
         carPos_wc.x += Time.deltaTime * carVelocity_wc.x;
         carPos_wc.y += Time.deltaTime * carVelocity_wc.y;
-
+        if(float.IsNaN(carPos_wc.x)) {
+            carPos_wc.x = 0;
+        }
+        if(float.IsNaN(carPos_wc.y)) {
+            carPos_wc.y = 0;
+        }
 
     // Angular velocity and heading
 
@@ -266,6 +315,26 @@ public class VehicleController : MonoBehaviour
         return magnitude;
     }
 
+
+    /* Visuals */
+
+    void VisualWheelModelRotation() {
+        foreach(Wheel w in wheels) {  
+            if(w.fl || w.fr) {
+                w.rotationLast += w.GetAngularVelocity() / (2*Mathf.PI);
+                Vector3 temp = w.model.localEulerAngles;
+                temp.y = maxSteerAngle * steering;
+                temp.z = 0;
+                temp.x = w.rotationLast;
+                w.model.localEulerAngles = temp;
+
+            }
+            else {
+                w.model.Rotate(w.GetAngularVelocity() / (2*Mathf.PI), 0, 0);
+            }
+        }
+    }
+
     void VisualWeightTransfer() {
 
         // Forward
@@ -276,7 +345,6 @@ public class VehicleController : MonoBehaviour
         float hypotenuseX = Mathf.Sqrt(carBody.wheelBase * carBody.wheelBase + rearHeight * rearHeight);
         
         float rotationX = Mathf.Asin((rearHeight-frontHeight)/hypotenuseX) * 180f / Mathf.PI;
-        rotationX = 0;
 
         // Lateral
 

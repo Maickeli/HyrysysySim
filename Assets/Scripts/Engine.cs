@@ -5,7 +5,7 @@ using UnityEngine;
 public class Engine : MonoBehaviour
 {
     public VehicleController vehicleController;
-    public AnimationCurve torque; // change to curve
+    public AnimationCurve torque; 
     public float rpmLimit;
 
 

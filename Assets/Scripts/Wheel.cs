@@ -12,6 +12,7 @@ public class Wheel : MonoBehaviour
     public bool fl, fr, rl, rr;
     public AnimationCurve coefficientFrictionByTemperature;
     public AnimationCurve coefficientFrictionBySlipAngle;
+    public AnimationCurve coefficientFrictionBySlipRatio;
     public float coefficientOfFrictionForward;
     public float coefficientOfFrictionForwardOnSlip;
     public float coefficientOfRollingFrictiontion = 0.015f;
@@ -19,10 +20,17 @@ public class Wheel : MonoBehaviour
     public float lateralVelocity;
     public float slipAngle;
     float weightOnWheel = 0;
+
+    public AudioSource audioSource;
+
+    // Visual
+    public Transform model;
+    public float rotationLast;
     
     void Start() {
         carBody = vehicleController.carBody;
         gearbox = vehicleController.gearbox;
+        audioSource = GetComponent<AudioSource>();
     }
 
     public float GetRollingResistance() {
@@ -59,7 +67,7 @@ public class Wheel : MonoBehaviour
             weightOnWheel = carBody.mass * Environment.gravity * (carBody.fromCenterToRearAxle / carBody.wheelBase);
 
             // Affection of Forward acceleration
-            weightOnWheel = weightOnWheel - ((carBody.centerOfGravityHeight / carBody.wheelBase) * (vehicleController.force.x / 2)); // / 4 pois?
+            weightOnWheel = weightOnWheel - ((carBody.centerOfGravityHeight / carBody.wheelBase) * (vehicleController.force.x / 2)); 
         }
 
         // Affection of cornering ; / 2 assuming center of gravity is in center; 
@@ -84,14 +92,13 @@ public class Wheel : MonoBehaviour
         if(rl || rr) {
             torque = gearbox.TorqueOnAxis() / 2;
         }
+        torque -= vehicleController.brakeForce * vehicleController.brake * Mathf.Sign(vehicleController.velocity.x);
         return torque;
     }
 
     public float GetWheelForwardTractionForce() {
-        float force = 0;
-        if(rl || rr) {
-            force = GetTorqueOnWheel() / radius;
-        }
+        float force = GetTorqueOnWheel() / radius;
+        
         return force;
     }
 
@@ -113,5 +120,14 @@ public class Wheel : MonoBehaviour
     float GetInertia() {
         float inertia = 0.5f * (mass * radius * radius); // Can be better
         return inertia;
+    }
+
+    public float GetSlipRatio() {
+        float slipRatio = Mathf.Abs((GetAngularVelocity() * radius - vehicleController.velocity.x) / Mathf.Abs(vehicleController.velocity.x));
+
+        if(float.IsNaN(slipRatio)) {
+            return 0;
+        }
+        return slipRatio;
     }
 }
