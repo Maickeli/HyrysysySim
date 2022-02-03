@@ -58,6 +58,7 @@ public class VehicleController : MonoBehaviour
     {
         suspension = GetComponent<Suspension>();
         audioSource = GetComponent<AudioSource>();
+        GetComponent<Rigidbody>().detectCollisions = true;
     }
 
     float timer;
@@ -159,17 +160,17 @@ public class VehicleController : MonoBehaviour
         float forwardGripFront = 0;
         float forwardGripRear = 0;
         foreach(Wheel w in wheels) {
-            if(w.fl || w.fr) {
-                weightFront += w.GetWeightOnWheel();
-                corneringStiffnessFront += wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI));
-                forwardGripFront += w.coefficientFrictionBySlipRatio.Evaluate(w.GetSlipRatio());
-                //corneringStiffnessFront += w.corneringStiffness;
-            }
-            if(w.rl || w.rr) {
-                weightRear += w.GetWeightOnWheel();
-                corneringStiffnessRear += wheelGrip.Evaluate(Mathf.Abs(rearSlipAngle*180f/Mathf.PI));
-                forwardGripRear += w.coefficientFrictionBySlipRatio.Evaluate(w.GetSlipRatio());
-                //corneringStiffnessRear += w.corneringStiffness;
+            if(w.isGrounded) {
+                if(w.fl || w.fr) {
+                    weightFront += w.GetWeightOnWheel();
+                    corneringStiffnessFront += wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI));
+                    forwardGripFront += w.coefficientFrictionBySlipRatio.Evaluate(w.GetSlipRatio());
+                }
+                if(w.rl || w.rr) {
+                    weightRear += w.GetWeightOnWheel();
+                    corneringStiffnessRear += wheelGrip.Evaluate(Mathf.Abs(rearSlipAngle*180f/Mathf.PI));
+                    forwardGripRear += w.coefficientFrictionBySlipRatio.Evaluate(w.GetSlipRatio());
+                }
             }
         }
 
@@ -207,7 +208,7 @@ public class VehicleController : MonoBehaviour
                 }
                 frontWheelsTractionForceForwardMax += maxTractionForce;
                 frontWheelsTractionForceForward += tractionForce;
-            }
+            } 
         }
 
         ftraction.x = rearWheelsTractionForceForward + frontWheelsTractionForceForward;
@@ -216,8 +217,6 @@ public class VehicleController : MonoBehaviour
         
         // Forces and torque on body
 
-        // lateral force on front wheels = (Ca * slip angle) capped to friction circle * load
-        flatf.x = 0;
         //float maxLateralForceFront = magicValue * Mathf.Sign(frontSlipAngle) * wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI)) * weightFront;
 
         // Friction circle thingy: sqrt(1^2 - (tractionForce / maxTractionForce)^2)
@@ -234,19 +233,13 @@ public class VehicleController : MonoBehaviour
             frictionCircleMultiplierFront = 1;
             frictionCircleMultiplierRear = 1;
         }
-        //Debug.Log("f: " + frictionCircleMultiplierFront + " r: " + frictionCircleMultiplierRear);
 
-        flatf.y = -Mathf.Sign(frontSlipAngle) * corneringStiffnessFront * weightFront * frictionCircleMultiplierFront; 
-        //wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI))
-        
+        flatf.y = -Mathf.Sign(frontSlipAngle) * corneringStiffnessFront * weightFront * frictionCircleMultiplierFront;         
 
         // lateral force on rear wheels
-        flatr.x = 0;
         flatr.y = -Mathf.Sign(rearSlipAngle) * corneringStiffnessRear * weightRear * frictionCircleMultiplierRear; 
         
-        // wheelGrip.Evaluate(Mathf.Abs(rearSlipAngle*180f/Mathf.PI))
-
-        
+  
         float totalRollingResitance = 0;
         foreach(Wheel w in wheels) {
             totalRollingResitance += w.GetRollingResistance();
@@ -258,31 +251,15 @@ public class VehicleController : MonoBehaviour
             resistance.y = - Mathf.Sign(velocity.y) * (carBody.GetAeroDragSide() + totalRollingResitance);
         }
 
-        //Debug.Log("a " + Mathf.Sign(velocity.y) *  carBody.GetAeroDragSide() + " r " + totalRollingResitance);
+
         // sum forces
-
-
-        if(isGrounded) {
-            force.x = ftraction.x + Mathf.Sin(steeringAngleRad) * flatf.x + flatr.x + resistance.x;
-            force.y = ftraction.y + Mathf.Cos(steeringAngleRad) * flatf.y + flatr.y + resistance.y;
-        }    
-        else {
-            resistance.x = -carBody.GetAeroDrag();
-            resistance.y = - Mathf.Sign(velocity.y) * carBody.GetAeroDragSide();
-            force.x = resistance.x;
-            force.y = resistance.y;
-        }
-
-
-
+        force.x = ftraction.x + resistance.x;
+        force.y = ftraction.y + Mathf.Cos(steeringAngleRad) * flatf.y + flatr.y + resistance.y;
+         
 
         // torque on body from lateral forces
-        if(isGrounded) {
-            torque = carBody.fromCenterToFrontAxle * flatf.y - carBody.fromCenterToRearAxle * flatr.y;
-        }
-        else {
-            torque = 0;
-        }
+        torque = carBody.fromCenterToFrontAxle * flatf.y - carBody.fromCenterToRearAxle * flatr.y;
+
 
 
     // Acceleration
@@ -340,13 +317,22 @@ public class VehicleController : MonoBehaviour
         RaycastHit[] hit = new RaycastHit[4];
         int i = 0;
         foreach(Wheel w in wheels) {
-            if (Physics.Raycast(w.model.position + new Vector3(0, 0.1f, 0), transform.TransformDirection(-Vector3.up), out hit[i], Mathf.Infinity, 7))
+            if (Physics.Raycast(w.model.position + new Vector3(0, 0.3f, 0), transform.TransformDirection(-Vector3.up), out hit[i], Mathf.Infinity, 7))
             {
-                Debug.DrawRay(w.model.position, transform.TransformDirection(-Vector3.up) * hit[i].distance, Color.yellow);     
+                Debug.DrawRay(w.model.position, transform.TransformDirection(-Vector3.up) * hit[i].distance, Color.yellow);
+                //Debug.Log(w.model.position.y - hit[i].point.y - 0.35f);
+                if(w.model.position.y - w.radius - 0.08f <= hit[i].point.y) { // 0.08f IS OFFSET, CAN BE MAYBE REMOVED WHEN SUSPENSION
+                    w.isGrounded = true;
+                }
+                else {
+                    w.isGrounded = false;
+                }
             }
             else
             {
                 Debug.DrawRay(w.model.position, transform.TransformDirection(-Vector3.up) * 1000, Color.white);
+
+                w.isGrounded = true;
             }
             i++;
         }
@@ -355,37 +341,43 @@ public class VehicleController : MonoBehaviour
     }
 
     float yPos;
-    float groundHeight;
     float yVelocity;
     bool isGrounded;
     float rotationX;
     float rotationZ;
-    void CalculateCarRotationToMatchGround(RaycastHit[] hit) {
-        
+    float frontHeight;
+    float rearHeight;
 
-        float newGroundHeight = (hit[0].point.y + hit[1].point.y + hit[2].point.y + hit[3].point.y) / 4f;//Mathf.Min(Mathf.Min(Mathf.Min(hit[0].point.y + hit[1].point.y), hit[2].point.y), hit[3].point.y); //
-        if(yPos <= newGroundHeight + 0.01f) {
+    void CalculateCarRotationToMatchGround(RaycastHit[] hit) {
+        if(wheels[0].isGrounded || wheels[1].isGrounded || wheels[2].isGrounded || wheels[3].isGrounded) {
+            //isGrounded = true;
+        }
+        else {
+            //isGrounded = false;
+        }
+
+
+        float newGroundHeight = (hit[0].point.y + hit[1].point.y + hit[2].point.y + hit[3].point.y) / 4f;// //
+        //float newGroundHeight = Mathf.Min(Mathf.Min(Mathf.Min(hit[0].point.y + hit[1].point.y), hit[2].point.y), hit[3].point.y);
+        if(yPos <= newGroundHeight) {
             yVelocity = (newGroundHeight - yPos) / Time.deltaTime;
-            isGrounded = true;
         }
         else{
             yVelocity -= (Environment.gravity * magicValue) * Time.deltaTime;
-            isGrounded = false;
         }
         
         yPos += yVelocity * Time.deltaTime;
                 
         // No underground here
         if(yPos <= newGroundHeight) { 
-            yPos = newGroundHeight;     
+            //yPos = newGroundHeight;     
         }
 
     if(isGrounded)
     {
         // Forward rotation
-        
-        float frontHeight = (hit[0].point.y + hit[1].point.y) / 2;
-        float rearHeight = (hit[2].point.y + hit[3].point.y) / 2;
+        frontHeight = (hit[0].point.y + hit[1].point.y) / 2f; //Mathf.Max(hit[0].point.y + hit[1].point.y);
+        rearHeight = (hit[2].point.y + hit[3].point.y) / 2f;//Mathf.Max(hit[2].point.y + hit[3].point.y);
 
         float frontAndRearDifference = frontHeight - rearHeight;
         if(frontAndRearDifference != 0) {
@@ -405,8 +397,8 @@ public class VehicleController : MonoBehaviour
 
         // Sideways rotation
 
-        float leftHeight = hit[0].point.y;
-        float rightHeight = hit[1].point.y;
+        float leftHeight = (hit[0].point.y + hit[2].point.y) / 2f;
+        float rightHeight = (hit[1].point.y + hit[3].point.y) / 2f;
 
         float leftAndRightDifference = leftHeight - rightHeight;
         if(leftAndRightDifference != 0) {
@@ -425,11 +417,17 @@ public class VehicleController : MonoBehaviour
         }
     }
 
-
-        
-Debug.Log(yVelocity);
         transform.eulerAngles = new Vector3(rotationX, transform.eulerAngles.y, rotationZ);
         transform.position = new Vector3(transform.position.x, yPos, transform.position.z);
+    }
+
+    void OnCollisionStay(Collision col) {
+        isGrounded = true;
+    }
+
+    void OnCollisionExit(Collision col) {
+        isGrounded = false;
+        Debug.Log("Exit col");
     }
 
 

@@ -20,6 +20,7 @@ public class Wheel : MonoBehaviour
     public float lateralVelocity;
     public float slipAngle;
     float weightOnWheel = 0;
+    public bool isGrounded;
 
     public AudioSource audioSource;
 
@@ -31,12 +32,15 @@ public class Wheel : MonoBehaviour
         carBody = vehicleController.carBody;
         gearbox = vehicleController.gearbox;
         audioSource = GetComponent<AudioSource>();
+        isGrounded = true;
     }
 
     public float GetRollingResistance() {
-        float rollingResistanceForce = Mathf.Sign(vehicleController.velocity.x) * (GetWeightOnWheel() * coefficientOfRollingFrictiontion) 
-            / Mathf.Sqrt((radius * radius) - (coefficientOfRollingFrictiontion * coefficientOfRollingFrictiontion));
-
+        float rollingResistanceForce = 0;
+        if(isGrounded) {
+            rollingResistanceForce = Mathf.Sign(vehicleController.velocity.x) * (GetWeightOnWheel() * coefficientOfRollingFrictiontion) 
+                / Mathf.Sqrt((radius * radius) - (coefficientOfRollingFrictiontion * coefficientOfRollingFrictiontion));
+        }
         return rollingResistanceForce;
     }
 
@@ -97,8 +101,11 @@ public class Wheel : MonoBehaviour
     }
 
     public float GetWheelForwardTractionForce() {
-        float force = GetTorqueOnWheel() / radius;
-        
+        float force = 0;
+        if(isGrounded) {
+            force = GetTorqueOnWheel() / radius;
+        }
+   
         return force;
     }
 
