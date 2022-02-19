@@ -5,15 +5,18 @@ using UnityEngine;
 public class Suspension : MonoBehaviour
 {
     VehicleController vehicleController;
+    CarBody carBody;
 
     public float springLength = 0.2f;
     public float springConstant = 80000;
+    public float dampingForce;
+    float springPos;
 
     //public float springPos;
 
     void Start() {
         vehicleController = GetComponent<VehicleController>();
-
+        carBody = vehicleController.carBody;
     }
 
     public float GetSpringPosFront() {
@@ -74,5 +77,20 @@ public class Suspension : MonoBehaviour
         if(springPos > springLength) springPos = springLength;
         
         return springPos;
+    }
+
+    float GetDampingRatio() {
+        float dampingCoefficient = dampingForce / (0 - 0); // 0 - 0 = Carbody vertical speed - wheel vertical speed
+        float dampingRatio = dampingCoefficient / (2 * Mathf.Sqrt(springConstant * carBody.mass));
+        return dampingRatio;
+    }
+
+    float GetSpringPos() {
+        //float magnitudeOfResponse = 0;
+        //float naturalFreq = Mathf.Sqrt(1f - );
+        //float phaseAngle = Mathf.Atan();
+
+
+        return 0;
     }
 }

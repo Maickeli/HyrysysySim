@@ -1955,7 +1955,7 @@ MonoBehaviour:
   sideslip: 0
   force: {x: 0, y: 0}
   acceleration_wc: {x: 0, y: 0}
-  carVelocity_wc: {x: 0, y: 0}
+  carVelocity_wc: {x: 0, y: 10}
   carPos_wc: {x: 0, y: 0}
   minFrictionCircleValue: 0.2
   wheelGrip:
@@ -2117,6 +2117,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   springLength: 0.25
   springConstant: 60000
+  dampingForce: 0
 --- !u!82 &5815435759599820612
 AudioSource:
   m_ObjectHideFlags: 0

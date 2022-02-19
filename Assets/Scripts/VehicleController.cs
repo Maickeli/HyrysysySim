@@ -109,50 +109,23 @@ public class VehicleController : MonoBehaviour
         float steeringAngleDeg = steering * maxSteerAngle;
         float steeringAngleRad = steeringAngleDeg / 180 * Mathf.PI;
 
-        if( steeringAngleRad != 0.0f )
-        {
-            //int breakme = 1;
-        }
-
-        // SAE convention: x is to the front of the car, y is to the right, z is down
-
-        //	bangz: Velocity of Car. Vlat and Vlong
-        // transform velocity in world reference frame to velocity in car reference frame
+        // Velocity from world space to car 
         velocity.x =  cs * carVelocity_wc.y + sn * carVelocity_wc.x;
         velocity.y = -sn * carVelocity_wc.y + cs * carVelocity_wc.x;
 
     // Lateral force on wheels
     //	
-        // Resulting velocity of the wheels as result of the yaw rate of the car body
-        // v = yawrate * r where r is distance of wheel to CG (approx. half wheel base)
-        // yawrate (ang.velocity) must be in rad/s
-        //
         yawspeed = carBody.wheelBase * 0.5f * angularVelocity;	
 
-        //bangz: velocity.x = fVLong_, velocity.y = fVLat_
-        if( velocity.x == 0 )		// TODO: fix singularity
-            rot_angle = 0;
-        else
-            rot_angle = Mathf.Atan2( yawspeed, Mathf.Abs(velocity.x));
+        if(velocity.x == 0) rot_angle = 0;
+        else rot_angle = Mathf.Atan2( yawspeed, Mathf.Abs(velocity.x));
 
-        
+        sideslip = Mathf.Atan2( velocity.y, Mathf.Abs(velocity.x));
 
-        // Calculate the side slip angle of the car (a.k.a. beta)
-        //if( velocity.x == 0 )		// TODO: fix singularity
-        //    sideslip = 0;
-        //else
-            sideslip = Mathf.Atan2( velocity.y, Mathf.Abs(velocity.x));
-            /*if(velocity.y < 0) {
-                sideslip = -sideslip;
-            }*/
-
-        // Calculate slip angles for front and rear wheels (a.k.a. alpha)
+        // Calculate slip angles for front and rear wheels
         frontSlipAngle = sideslip + rot_angle - (Mathf.Sign(velocity.x) * steeringAngleRad);
         rearSlipAngle  = sideslip - rot_angle;
 
-
-
-        // weight per axle = half car mass times 1G (=9.8m/s^2) /////////////////////////////////////////////////////////////////////////////////
         float weightFront = 0;
         float weightRear = 0;
         float corneringStiffnessFront = 0;
@@ -174,10 +147,7 @@ public class VehicleController : MonoBehaviour
             }
         }
 
-
-
-
-        // longtitudinal force on rear wheels - very simple traction model
+        // longtitudinal force
         float frontWheelsTractionForceForward = 0;
         float rearWheelsTractionForceForward = 0;
         float frontWheelsTractionForceForwardMax = 0;
@@ -185,8 +155,7 @@ public class VehicleController : MonoBehaviour
         foreach(Wheel w in wheels) {
             if(w.rl || w.rr) {
                 float tractionForce = w.GetWheelForwardTractionForce();               
-                float maxTractionForce = forwardGripRear * w.GetWeightOnWheel();//w.coefficientOfFrictionForward * w.GetWeightOnWheel();
-                //Debug.Log(forwardGripRear * w.GetWeightOnWheel());
+                float maxTractionForce = forwardGripRear * w.GetWeightOnWheel();
                 if(tractionForce > maxTractionForce) {
                     tractionForce = maxTractionForce;
                 }
@@ -216,9 +185,6 @@ public class VehicleController : MonoBehaviour
 
         
         // Forces and torque on body
-
-        //float maxLateralForceFront = magicValue * Mathf.Sign(frontSlipAngle) * wheelGrip.Evaluate(Mathf.Abs(frontSlipAngle*180f/Mathf.PI)) * weightFront;
-
         // Friction circle thingy: sqrt(1^2 - (tractionForce / maxTractionForce)^2)
         float frictionCircleMultiplierFront = Mathf.Sqrt(1f - (frontWheelsTractionForceForward / frontWheelsTractionForceForwardMax) * (frontWheelsTractionForceForward / frontWheelsTractionForceForwardMax));
         float frictionCircleMultiplierRear = Mathf.Sqrt(1f - (rearWheelsTractionForceForward / rearWheelsTractionForceForwardMax) * (rearWheelsTractionForceForward / rearWheelsTractionForceForwardMax));
@@ -236,7 +202,6 @@ public class VehicleController : MonoBehaviour
 
         flatf.y = -Mathf.Sign(frontSlipAngle) * corneringStiffnessFront * weightFront * frictionCircleMultiplierFront;         
 
-        // lateral force on rear wheels
         flatr.y = -Mathf.Sign(rearSlipAngle) * corneringStiffnessRear * weightRear * frictionCircleMultiplierRear; 
         
   
@@ -245,44 +210,39 @@ public class VehicleController : MonoBehaviour
             totalRollingResitance += w.GetRollingResistance();
         }
         
-        // drag and rolling resistance
+        // Resistances
         resistance.x = - (totalRollingResitance + carBody.GetAeroDrag());
         if(velocity.magnitude > 3) {
             resistance.y = - Mathf.Sign(velocity.y) * (carBody.GetAeroDragSide() + totalRollingResitance);
         }
 
 
-        // sum forces
+        // Forces
         force.x = ftraction.x + resistance.x;
         force.y = ftraction.y + Mathf.Cos(steeringAngleRad) * flatf.y + flatr.y + resistance.y;
          
 
-        // torque on body from lateral forces
+        // Torque
         torque = carBody.fromCenterToFrontAxle * flatf.y - carBody.fromCenterToRearAxle * flatr.y;
 
 
 
     // Acceleration
-        
-        // Newton F = m.a, therefore a = F/m
         acceleration.x = force.x/carBody.mass;
         acceleration.y = force.y/carBody.mass;
         
         angular_acceleration = torque / carBody.mass;
 
     // Velocity and position
-        
-        // transform acceleration from car reference frame to world reference frame
+        // Acceleration from world space to car
         acceleration_wc.x = cs * acceleration.y + sn * acceleration.x;
         acceleration_wc.y = -sn * acceleration.y + cs * acceleration.x;
 
-        // velocity is integrated acceleration
-        //
+        // Velocity
         carVelocity_wc.x += Time.deltaTime * acceleration_wc.x;
         carVelocity_wc.y += Time.deltaTime * acceleration_wc.y;
 
-        // position is integrated velocity
-        //
+        // Position
         carPos_wc.x += Time.deltaTime * carVelocity_wc.x;
         carPos_wc.y += Time.deltaTime * carVelocity_wc.y;
         if(float.IsNaN(carPos_wc.x)) {
@@ -292,16 +252,11 @@ public class VehicleController : MonoBehaviour
             carPos_wc.y = 0;
         }
 
-    // Angular velocity and heading
-
-        // integrate angular acceleration to get angular velocity
-        //
+    // Angular velocity
         angularVelocity += Time.deltaTime * angular_acceleration;
 
-        // integrate angular velocity to get angular orientation
-        //
         carAngle += Time.deltaTime * angularVelocity;
-        //carAngle = carAngle * 180 / Mathf.PI;
+
         float carAngleDeg = carAngle * 180 / Mathf.PI;
 
         transform.position = new Vector3(carPos_wc.x, transform.position.y, carPos_wc.y);
@@ -320,8 +275,7 @@ public class VehicleController : MonoBehaviour
             if (Physics.Raycast(w.model.position + new Vector3(0, 0.3f, 0), transform.TransformDirection(-Vector3.up), out hit[i], Mathf.Infinity, 7))
             {
                 Debug.DrawRay(w.model.position, transform.TransformDirection(-Vector3.up) * hit[i].distance, Color.yellow);
-                //Debug.Log(w.model.position.y - hit[i].point.y - 0.35f);
-                if(w.model.position.y - w.radius - 0.08f <= hit[i].point.y) { // 0.08f IS OFFSET, CAN BE MAYBE REMOVED WHEN SUSPENSION
+                if(w.model.position.y - w.radius - 0.08f <= hit[i].point.y) { // 0.08f is offset, can be removed when suspension is developed
                     w.isGrounded = true;
                 }
                 else {
@@ -357,8 +311,7 @@ public class VehicleController : MonoBehaviour
         }
 
 
-        float newGroundHeight = (hit[0].point.y + hit[1].point.y + hit[2].point.y + hit[3].point.y) / 4f;// //
-        //float newGroundHeight = Mathf.Min(Mathf.Min(Mathf.Min(hit[0].point.y + hit[1].point.y), hit[2].point.y), hit[3].point.y);
+        float newGroundHeight = (hit[0].point.y + hit[1].point.y + hit[2].point.y + hit[3].point.y) / 4f;
         if(yPos <= newGroundHeight) {
             yVelocity = (newGroundHeight - yPos) / Time.deltaTime;
         }
@@ -376,8 +329,8 @@ public class VehicleController : MonoBehaviour
     if(isGrounded)
     {
         // Forward rotation
-        frontHeight = (hit[0].point.y + hit[1].point.y) / 2f; //Mathf.Max(hit[0].point.y + hit[1].point.y);
-        rearHeight = (hit[2].point.y + hit[3].point.y) / 2f;//Mathf.Max(hit[2].point.y + hit[3].point.y);
+        frontHeight = (hit[0].point.y + hit[1].point.y) / 2f;
+        rearHeight = (hit[2].point.y + hit[3].point.y) / 2f;
 
         float frontAndRearDifference = frontHeight - rearHeight;
         if(frontAndRearDifference != 0) {
@@ -389,14 +342,13 @@ public class VehicleController : MonoBehaviour
             float delta = Mathf.Atan(middleHeight / fromFrontToMiddle);
             float epsilon = (0.5f * Mathf.PI) - delta;
             float beta = Mathf.PI - gamma - epsilon;
-            rotationX = ((0.5f * Mathf.PI) - (alpha + beta))  * 180f / Mathf.PI; // 
+            rotationX = ((0.5f * Mathf.PI) - (alpha + beta))  * 180f / Mathf.PI;
         }
         else {
             rotationX = 0;
         }
 
         // Sideways rotation
-
         float leftHeight = (hit[0].point.y + hit[2].point.y) / 2f;
         float rightHeight = (hit[1].point.y + hit[3].point.y) / 2f;
 
@@ -410,7 +362,7 @@ public class VehicleController : MonoBehaviour
             float delta = Mathf.Atan(middleHeight / fromLeftToMiddle);
             float epsilon = (0.5f * Mathf.PI) - delta;
             float beta = Mathf.PI - gamma - epsilon;
-            rotationZ = ((0.5f * Mathf.PI) - (alpha + beta))  * 180f / Mathf.PI; // 
+            rotationZ = ((0.5f * Mathf.PI) - (alpha + beta))  * 180f / Mathf.PI;
         }
         else {
             rotationZ = 0;
